@@ -90,6 +90,7 @@
 					delay: 300
 				});
 			setTimeout("location.href='home.do' ", 3000);
+			
 		</script>
 	</div>
 </body>
