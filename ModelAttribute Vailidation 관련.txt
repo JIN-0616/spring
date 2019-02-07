@@ -1,0 +1,126 @@
+https://github.com/wooseok01/study/wiki/%EC%BB%A4%EB%A7%A8%EB%93%9C-%EA%B0%9D%EC%B2%B4%EB%9E%80%3F-%EA%B7%B8%EB%A6%AC%EA%B3%A0-null%EA%B0%92%EC%9D%B4-%EB%93%A4%EC%96%B4%EC%98%AC-%EC%88%98-%EC%9E%88%EC%9D%84%EA%B9%8C%3F
+
+
+커맨드 객체
+커맨드 객체란 클라이언트가 보내주는 파라미터가 자동으로 담겨서 반환되는 객체를 말한다. 이는 자동 객체 변환이라는 말로도 이해할 수 있는데 MVC에서 가장 큰 핵심 기술 중에 하나라고도 이야기 할 수 있다.
+
+그러면 커맨드 객체는 어떻게 동작하는 걸까?
+그 동작 구조를 알기 위해서는 @ModelAttribute와 @RequestMappging 이라는 두개의 어노테이션에 대해서 알 필요가 있다.
+
+@RequestMapping
+@RequestMapping 어노테이션은 클라이언트가 보내는 request요청에 담겨진 key=value 구조에서 특정한 key에 해당하는 value를 바로 가져오기 위한 용도로 쓰인다. 예전에 servlet에서 request.getParameter("~") 와 같은 기능을 한다고 생각할 수 있다.
+@ModelAttribute
+@ModelAttribute는 조금 복잡하다. 필자가 이해한 것을 기준으로 설명을 하도록 하겠다.(틀릴 가능성도 있다..) 이 어노테이션이 붙은 객체(model)는 클라이언트가 보낸 여러개의 데이터중에서 객체의 멤버로 자동으로 할당을 해주는 역할을 한다. 이렇게 클라이언트가 보내는 파라미터가 직접 객체와 연결되어 마지막에는 파라미터의 값이 모두 할당된 객체를 리턴하기 방식 자체가 커맨드 패턴이기 때문에 우리는 커맨드 오브젝트라는 이름으로도 잘 알고 있는 것이다.
+
+그러면 커맨드 오브젝트 == @ModelAttribute인가? 조금 다르다고 생각한다. Spring을 사용해서 Controller 작업을 조금이라도 개발해본 적이 있는 사람이라면 아래와 같은 코드의 내용은 쉽게 찾아볼 수 있을 것이다.
+
+
+    @RequestMapping("/login")
+    public String userLogin(User user, Model model){
+        if( userService.login(user) ) {
+            return "user-main";
+        }
+        return "home";
+    }
+위의 코드는 사용자가 로그인이 성공하면 main으로 가고 그렇지 않은 경우에 다시 home으로 리다이렉팅하는 내용의 코드이다. 위의 코드 내용에서 @ModelAttribute라는 어노테이션은 어디에서도 찾아볼 수 없다. 하지만 위의 내용에서 user라는 모델의 멤버와 동일한 이름으로 클라이언트가 request에 내용을 담아서 보내주게 되면 우리는 클라이언트가 보내준 내용이 user안에 담겨서 Controller에 들어오는 신기한 상황을 확인할 수 있다. 그러면 @ModelAttribute라는 어노테이션이 자동으로 생략이 가능한가보다! 라고 생각할 수 있는데 정확하게 이야기 하자면 이는 Spring-mvc가 제공하고 있는 데이터 바인딩 기술로 인해서 user객체 안에 해당 내용이 담기는 과정이다. 물론 @ModelAttribute를 user객체 앞에 붙여도 동일한 효과를 보는 것은 맞다. 하지만 저런 데이터 바인딩 기술이 @ModelAttribute라고 보기에는 어렵다는 것이 필자가 공부하면서 내린 결론이다.
+
+spring-mvc의 데이터 바인딩 기술은 위의 예시에서 User객체를 예로 들어 설명하면 해당 url로 요청이 들어오게 되면 Spring-mvc는 기본적으로 User라는 객체의 default생성자를 호출해서 객체 인스턴스를 만들고 request에서 들어온 파라미터와 User안의 멤버 변수들과의 이름을 매칭하고 매칭되는 파라미터를 setter 함수를 이용해서 1:1로 맵핑하고 최종적으로 user라는 객체를 반환하게 되는 것이다.
+
+그러면 커맨드 객체는 Null일 수 있을까?
+공부하기 전에 필자는 Controller에서 커맨드 객체를 사용하고 있었음에도 불구하고 커맨드 객체가 null일 수 있다고 굳게 믿었다. 결론부터 말하면 default생성자가 private로 막혀있거나 다른 사용자 생성자를 만들고 default 생성자를 만들지 않은 경우 자바는 자동으로 default 생성자를 만들어주지 않기 때문에 Exception을 발생할 수는 있을지 모르지만 Controller를 통해서는 null값이 들어올 수 없다고 결론을 내렸다.
+
+
+Spring MVC(@SessionAttributes,@ModelAttribute,스프링 프레임워크 컨트롤러)
+
+Spring MVC(@SessionAttributes,@ModelAttribute,스프링 프레임워크 컨트롤러)
+
+@SessionAttributes를 이용하여 model 객체를 세션에 저장하기
+
+@SessionAttributes Annotation은 컨트롤러에서 사용되며 어노테이션에서 설정한 모델객체를 세션에 저장하는 역할을 하고 이후부터 해당 모델객체가 사용되면 세션에서 불러와서 사용하고 이를 뷰에서 이름으로 접근이 가능하도록 한다.
+
+@SessionAttributes 애노테이션을 컨트롤러 클래스에 붙이고 모델 이름을 인자로 넣어준다. 컨트롤러의 메소드가 만드는 모델 정보 중에 이름이 같은 것이 있으면 세션에도 저장하고  컨트롤러 메소드의 @ModelAttribute인자를 HTTP요청이 아니라 먼저 세션에서 검색하여 사용한다.
+
+@SessionAttributes로 세션에서 사용 완료된 객체는  사용 후에 SessionStatus.setComplete() 메소드로  세션에 저장한 정보를 제거 해야 한다.
+
+지속적으로 사용자의 입력 값을 유지시키기를 원하거나 여러 단계에 걸쳐 submit 되면서 완성되는 폼을 구성하는 경우에 사용가능 하다.
+
+고객정보 입력화면 등에서 한번 입력 후 입력 값이 잘못 입력되어 경고 창을 띄우고 다시 페이지를 만든다고 생각할 때 최초 입력한 정보를 세션에 두고 이를 바탕으로 입력화면을 다시 그려준다면 좋을 것 이다. 이때 @SessionAttributes를 사용하면 된다.
+
+또한 고객정보 등록화면이 여러 페이지에 걸쳐 입력되는 경우 @SessionAttributes를 사용한다면 미리 모델 객체를 생성하여 첫번째 고객입력화면의 내용을 객체에 저장해 두고, 다음 사용자 입력화면에서 나머지 고객정보를 입력하여 세션의 객체에 추가로 저장하면 된다. 물론 이 경우 데이터 입력 값 검증 시 에도 유용하다. 
+
+이번에는 많은 컬럼을 가진 고객정보를 수정하는 경우를 생각해보자. 고객ID를 받아서 수정을 위해 고객정보를 화면에 뿌려주는 부분과 수정된 정보를 서버로 전송하는 단계이다. 사용자 정보 수정 화면에서 고객의 정보를 모두 다 보여주고 수정하지는 않을 것이다. 로그인 아이디 등은 대부분 사이트에서 수정할 수 없고 일부 사용자 정보는 수정이 불필요하여 수정 폼에 나타나지 않거나 나타난다 하더라도 읽기 전용으로 출력될 것이다. 
+
+사용자가 폼을 수정하고 저장 버튼을 눌렀을 때는 원래의 고객정보객체에 담겨 있던 내용 중에서 고객정보 수정화면에서 출력했던 항목만 서버로 전송된다는 문제가 발생한다. 폼의 서브밋을 받는 컨트롤러 수정 메소드에서 만약 다음과 같이 User 오브젝트로 폼의 내용을 바인딩하게 했다면 어떻게 될 것 인가를 고민해 보자.
+
+@RequestMapping(value="/user/updateok", method=RequestMethod.POST)
+public String updateok(@ModelAttribute User user) {
+    userService.updateUser(user);
+    return “success";
+}
+
+@ModelAttribute 가 붙은 User 타입 메소드 파라미터를 선언했으므로 폼에서 전달된 정보는 User 오브젝트의 프로퍼티에 바인드 될 것이고, 폼 태그 내에 정의한 필드(서브밋 되는 항목)의 정보만 들어 갈 것이다. 단순히 화면에 읽기 전용으로 출력했던 항목이나 출력되지 않은 항목은 폼에서 전달되지 않으므로 updateok() 메소드의 파라미터로 전달되는 user 오브젝트에는 이런 프로퍼티 정보가 비어있게  된다.
+
+일부 항목이 빠진 user 오브젝트를 도메인 오브젝트로 사용해서 비즈니스 로직을 처리하는 서비스 계층, DB에 결과를 업데이트해주는 DAO쪽 빈에 전달한다고 했을 때 user 도메인 오브젝트를 이용해 비즈니스 로직을 처리하도록 만든 서비스 계층의 코드는 폼에서 어떤 내용만 다시 돌려지는지 알지 못하기 때문에 user 오브젝트를 받았다면 모든 프로퍼티 값을 다 사용하려 할 것이고 일부 비즈니스 로직에서는 잘못된 값이 사용될 수도 있다. 도메인 오브젝트를 사용하도록 만든 DAO단의 업데이트 메소드는 도메인 오브젝트의 수정 가능한 모든 필드를 항상 업데이트 하므로 일부 값이 null 이거나 0인 상태로 전달되어도 그대로 DB에 반영되어 버릴 수 있다. 
+
+이러한 문제를 해결하기 위한 방법이 @SessionAttributes를 이용하는 것이다.
+
+
+ @SessionAttributes 애노테이션을 클래스 레벨에 부여하고 폼의 정보를 담을 모델 이름을 인자로 기술하면 된다.
+ 
+@Controller
+@SessionAttributes("user")
+public class UserController {
+ 
+    @RequestMapping(value = "/user/update", method = RequestMethod.GET)
+    public String update(@RequestParam int id, Model model) {
+        model.addAttribute("user", userService.getUser(id));
+        return "updateview";
+    }
+ 
+    //세션에서 user 객체를 검색해 있으면 메소드의 인자로 넣어주고 없으면 에러가 발생한다.
+    @RequestMapping(value = "/user/update", method = RequestMethod.POST)
+    public String updateok(@ModelAttribute User user, SessionStatus sessionStatus) {
+	……
+	SessionStatus.setComplete();   //사용한 후 세션에 저정한 user 객체를 제거…
+	return “updateok”;
+    }  
+}
+
+
+
+@Controller
+@SessionAttributes(“user”)
+public class OracleJavaController {
+ 
+    @RequestMapping(value=“/user.htm", method=RequestMethod.GET)
+    public ModelAndView handleRequest(@ModelAttribute(“user”) User user) {
+        user.setName(“onj”);
+        return new ModelAndView(“userview");
+    } 
+}
+
+스프링은 “user”라는 이름의 객체를 세션에서 검색하고 handleRequest() 메소드에 전달한다. 만약 세션에서 찾지 못한다면 HttpSessionRequiredException 예외가 발생된다. userview가 렌더링될 때 model의 객체 “user”가 HttpServletRequest, HttpSession에 “user”라는 키값을 가지고 복사된다.
+
+
+
+
+@Controller
+public class OracleJavaController {
+ 
+    @RequestMapping(value=“/user.htm", method=RequestMethod.GET)
+    public ModelAndView handleRequest(@ModelAttribute(“user”) User user) {
+        user.setName(“onj”);
+        return new ModelAndView(“userview");
+    } 
+}
+
+User의 새로운 인스턴스가 생성되고 handleRequest() 메소드의 인자로 전달된다. 만약 User Type이 인터페이스나 추상클래스라면 BeanInstantiationException  예외가 발생된다.
+
+
+
+
+https://taetaetae.github.io/2017/03/12/spring-parameter/
+스프링환경에서의 파라미터 관련 정리
+
+
+

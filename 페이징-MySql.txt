@@ -1,0 +1,728 @@
+Spring MVC로 만드는 게시판 페이징 요점 정리(Thymeleaf기반 게시판)
+2018-08-10  CRITERIA, PAGEMAKER, THYMELEAF, BOARD, PAGE, PAGING, 게시판, 페이징
+항목	개발환경	비고
+운영체제	Widnwos10(64)	
+백엔드프레임워크	Spring MVC 4	
+개발언어	java1.8	
+WAS	Tomcat9	
+템플릿엔진	Thymeleaf3	
+템플릿엔진레이아웃	Tymeleaf-laout-dialect2	
+DB	mysql8	
+ORM	mybatis	
+¶들어가기
+난 내가 나름 개발짬좀 먹었다고 생각했다.
+그런데 아직도 게시판 만드는것이 어렵게 느껴진다.
+특히 어려운 부분은 페이징에 관련된 것이라 생각된다.
+
+그래서 이번에 스프링 책을 보며 페이징이 적용된 게시판 예제를 만들어 보았다.
+이 글은 이번에 공부한 게시판의 페이징 부분에 포인트만 정리한 글이다.
+게시판 자체의 CURD는 생략했다.
+
+페이징이 적용된 게시판 모습
+페이징이 적용된 게시판 모습
+
+¶게시판 페이징 처리원칙
+게시판의 페이지는 다른 사람에게 URL로 전달하는 경우가 많기 때문에, 반드시 GET 방식으로만 처리된다.
+하지만 GET방식으로 게시판을 구현하다 보면, 어쩔수 없이 귀찮은 것이 생긴다.
+
+화면을 변경할때 마다 기본적으로 유지해야 할 상태 값들을 쿼리스트링으로 URL에 달고 다녀야 하는 것이 문제다.
+예를 들어 글을 읽으러 들어갈때, 게시판 페이징의 상태 값인 현재 페이지 번호와, 한번에 보여줄 페이지 개수, 한번에 보여줄 글의 개수 등을 가지고 다녀야 한다.
+그래야 글을 다 읽고 게시판 목록으로 나올때 게시판 페이지상태를 유지할 수가 있기 때문이다.
+
+위와 같은 이유로 게시판을 만들때 발생하는 다양한 링크를 생성할 때 주의해야 한다.
+
+일단 게시판의 페이징은 크개 두개의 로직으로 나누어 진다.
+하나는 Criteria 또 하나는 PageMaker 이다.
+참고로 PageMaker는 Criteria를 기반한다.
+
+¶특정 페이지의 게시판을 조회하기 위한 도우미 클래스 Criteria.java
+일단 Criteria라는 말은 검색을 위한 기준데이터를 의미한다.
+페이징이 적용된 게시판을 조회하기 위한 최소 필요 데이터 다음과 같다.
+
+한 페이지당 보여줄 게시글의 개수 그리고 어떤 페이지 번호를 보여줄 것인가?
+
+위 데이터와 mysql 의 limit를 이용해서 특정 페이지를 조회하는 쿼리를 만들면 다음과 같다.
+
+1
+2
+3
+4
+5
+6
+7
+select 
+      *
+  from 게시판테이블
+  where 1=1
+  and 게시글번호 > 0
+  order by 게시글번호 desc, 등록일자 desc
+  limit (현재 보여줄 페이지 번호 - 1) * 한 페이지당 보여줄 게시글의 개수, 한 페이지당 보여줄 게시글의 개수
+그리고 위 쿼리를 실제 mybatis 매핑 쿼리로 보면 다음과 같다.
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+<!-- criteria 를 적용한 게시판 페이징 조회 -->
+<select id="listCriteria" resultType="BoardVO">
+<![CDATA[
+select
+    bno, title, content, writer, regdate, viewcnt
+from
+    tbl_board
+where bno > 0
+order by bno desc, regdate desc
+limit #{pageStart}, #{perPageNum}
+]]>
+</select>
+pageStart: (현재 보여줄 페이지 번호 - 1) * 한 페이지당 보여줄 게시글의 개수 이다. 이 값은 Criteria.java로 부터 전달 받을 것이다.
+perPageNum: 한 페이지당 보여줄 게시글의 개수이다.
+
+시스템에 게시판은 여러종류가 있을수 있으며, 이런 페이징 부분은 공통적으로 사용해야 하므로 페이징 관련 기능은 특정 게시판 로직에 넣지 말고 별도의 클래스로 분리한다.
+
+Criteria.java는 페이징을 위해 분리한 VO종류의 클래스이며, 위 listCriteria 마이바티스 쿼리 동작시 전달될 파라미터가 된다.
+내용은 아래와 같다.
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+package com.hanumoka.sample.vo;
+
+//게시판 페이징 전용 클래스
+//Criteria : 사전적 의미로는 검색기준, 분류기준
+public class Criteria {
+
+	private int page;  		    // 보여줄 페이지 번호
+	private int perPageNum;   // 페이지당 보여줄 게시글의 개수
+	
+	public Criteria() {
+		//최초 게시판에 진입할 때를 위해서 기본 값을 설정 해야 한다.
+		this.page = 1;
+		this.perPageNum = 10;
+	}
+
+	public int getPage() {
+		return page;
+	}
+
+	public void setPage(int page) {
+		if(page <= 0) {
+			this.page = 1;
+			return;
+		}
+		
+		this.page = page;
+	}
+
+	public int getPerPageNum() {
+		return perPageNum;
+	}
+
+	public void setPerPageNum(int perPageNum) {
+		
+		if(perPageNum <= 0 || perPageNum > 100) {
+			this.perPageNum = 10;
+			return;
+		}
+		
+		this.perPageNum = perPageNum;
+	}
+	
+	/* limit 구문에서 시작 위치를 지정할 때 사용된다. 예를 들어 10개씩 출력하는 경우 3페이지의 데이터는 linit 20, 10 과 같은 형태가 되어야 한다. */
+	/* this.page 가 1이면 0이 되어야 한다 mysql limit 0, 10 해야 처음부터 10개씩 나온다. */
+  /* 마이바티스 조회쿼리의 #{pageStart}에 전달된다. */
+	public int getPageStart() {
+		return (this.page -1) * perPageNum;
+	}
+	
+
+	@Override
+	public String toString() {
+		return "Criteria [page=" + page + ", perPageNum=" + perPageNum + "]";
+	}
+}
+Criteria.java 와 위 조회쿼리를 이용하면 게시판을 한 페이지 씩 조회하는 것은 가능하다.
+3번 페이지를 조회하고 10개 데이터를 추릴수가 있게 된 것이다.
+
+Criteria의 도움으로 특정 페이지를 조회한 모습
+Criteria의 도움으로 특정 페이지를 조회한 모습
+
+¶게시판 페이징을 실제 담당하는 클래스 PageMaker.java
+Criteria.java의 도움으로 게시판의 특정 페이지를 조회하기 위한 준비는 끝났다.
+이제 해야 할 것은 게시판 하단에 있을 페이징 관련 부분을 만드는 기능이 필요하다.
+
+게시판 페이징의 핵심인 페이징 버튼
+게시판 페이징의 핵심인 페이징 버튼
+
+이 부분은 이전페이지버튼, 다음페이지버튼 그리고 페이지번호 버튼 크게 3부분으로 나뉜다.
+즉 이 세부분을 다루어야 하며 이것을 위한 필요 데이터가 있다.
+
+필요 데이터는 다음과 같다.
+
+Criteria를 통한 현재페이지번호, 한페이지 당 게시글개수
+
+그리고 게시판 화면에서 한번에 보여질 페이지 번호의 개수 이다.
+
+Criteria는 이미 생성했으니 PageMaker에서는 Criteria를 그대로 사용하면 된다.
+
+위 필요데이터를 사용하여 PageMaker가 생성할 데이터는 다음과 같다.
+
+생성순서1 totalCount 게시판 글 전체 개수.
+생성순서2 tempEndPage: 게시판의 실제 마지막 페이지 번호.
+생성순서3 endPage: 게시판을 화면에 보여질 마지막 페이지 번호.
+생성순서4 startPage: 게시판을 화면에 보여질 첫번째 페이지 번호.
+생성순서5 prev: 이전 페이지 버튼 활성화 여부.
+생성순서6 next: 다음 페이지 버튼 활성화 여부.
+
+생성순서는 중요하다. 뒤 순서 데이터는 앞 순서 데이터를 참조하기 때문이다.
+데이터 생성 공식은 다음과 같다.
+
+totlaCount 공식: 조회 쿼리 count(*)를 이용해서 전체 게시글 개수를 구한다.
+
+tempEndPage 공식: (int)(Math.ceil(totalCount / (double)Criteria의 한페이지 당 게시글 개수))
+
+endPage 공식: (int)(Math.ceil(현재 페이지번호 / (double)한번에 보여질 페이지 번호개수) * 한번에 보여질 페이지번호 개수).
+하지만 여기서 endPage의 값은 tempEndPage보다 클수 없어야 한다.
+
+startPage 공식: (endPage - 한번에 보여질 페이지 번호 개수) + 1
+
+prev 공식: startPage가 1이 아니면 활성화, 1이 면 비활성화
+
+next 공식: (endPage * Criteria의 한페이지 당 게시글 개수) 가 totlaCount보다 크거나 같으면 비활성화, 아니면 활성화이다.
+next공식은 책에서 나온 것인데, 그냥 endPage가 tempEndPage보다 작으면 활성화 아니면 비활성화 하는것이 더 간단해 보인다.
+
+PageMaker.java의 내용은 아래와 같다.
+calcData메소드에서 필요한 데이터를 생성하는 것을 확인 할 수 있따.
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+package com.hanumoka.sample.vo;
+
+//게시판 페이징 하단 부문 담당
+public class PageMaker {
+
+	private int totalCount;     // 게시판 전체 데이터 개수
+	private int displayPageNum = 10;   // 게시판 화면에서 한번에 보여질 페이지 번호의 개수 ( 1,2,3,4,5,6,7,9,10)
+	
+	private int startPage;      // 현재 화면에서 보이는 startPage 번호
+	private int endPage;        // 현재 화면에 보이는 endPage 번호
+	private boolean prev;       // 페이징 이전 버튼 활성화 여부
+	private boolean next;       // 페이징 다음 버튼 활서화 여부
+	
+	private Criteria cri;       // 앞서 생성한 Criteria를 주입받는다.
+
+	public int getTotalCount() {
+		return totalCount;
+	}
+
+	public void setTotalCount(int totalCount) {
+		this.totalCount = totalCount;
+		
+		calcData();
+	}
+	
+	private void calcData() {
+		endPage = (int) (Math.ceil(cri.getPage() / (double) displayPageNum) * displayPageNum);
+		
+		startPage = (endPage - displayPageNum) + 1;
+		
+		int tempEndPage = (int) (Math.ceil(totalCount / (double) cri.getPerPageNum()));
+		
+		if(endPage > tempEndPage) {
+			endPage = tempEndPage;
+		}
+		
+		prev = startPage == 1 ? false : true;
+		
+		next = endPage * cri.getPerPageNum() >= totalCount ? false : true;
+	}
+
+	public int getStartPage() {
+		return startPage;
+	}
+
+	public void setStartPage(int startPage) {
+		this.startPage = startPage;
+	}
+
+	public int getEndPage() {
+		return endPage;
+	}
+
+	public void setEndPage(int endPage) {
+		this.endPage = endPage;
+	}
+
+	public boolean isPrev() {
+		return prev;
+	}
+
+	public void setPrev(boolean prev) {
+		this.prev = prev;
+	}
+
+	public boolean isNext() {
+		return next;
+	}
+
+	public void setNext(boolean next) {
+		this.next = next;
+	}
+
+	public int getDisplayPageNum() {
+		return displayPageNum;
+	}
+
+	public void setDisplayPageNum(int displayPageNum) {
+		this.displayPageNum = displayPageNum;
+	}
+
+	public Criteria getCri() {
+		return cri;
+	}
+
+	public void setCri(Criteria cri) {
+		this.cri = cri;
+	}
+
+	@Override
+	public String toString() {
+		return "PageMaker [totalCount=" + totalCount + ", startPage=" + startPage + ", endPage=" + endPage + ", prev="
+				+ prev + ", next=" + next + ", displayPageNum=" + displayPageNum + ", cri=" + cri + "]";
+	}
+		
+}
+이제 게시판 페이징을 위한 준비물은 끝났다.
+
+¶페이징 게시판 컨트롤러
+컨트롤러는 앞서 말한듯이 get 방식이고 파라미터는 Criteria이다.
+Criteria에 파라미터가 없을시에 생성자에서 기본값을 셋팅될 것이다.
+그리고 Criteria을 이용해서 특정 페이지의 게시판 리스트를 조회한다.
+
+마지막으로 게시판 하단의 페이징을 담당하는 PageMaker를 생성하고 화면에 전달한다.
+pageMaker의 setTotalCount메소드가 호출되면서 페이징에 필요한 데이터가 생성된다.
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+@RequestMapping(value = "/listPage", method = RequestMethod.GET)
+	public String listPage(@ModelAttribute("cri") Criteria cri, Model model) throws Exception {
+		
+		logger.info(cri.toString());
+		
+		model.addAttribute("list", service.listCriteria(cri));  // 게시판의 글 리스트
+		PageMaker pageMaker = new PageMaker();
+		pageMaker.setCri(cri);
+		pageMaker.setTotalCount(service.listCountCriteria(cri));
+		
+		model.addAttribute("pageMaker", pageMaker);  // 게시판 하단의 페이징 관련, 이전페이지, 페이지 링크 , 다음 페이지
+		
+		return "/samples/board/listPage";
+	}
+¶페이징 게시판 화면단
+이 예제의 화면단은 jsp가 아니라 Thymeleaf3 템플릿엔진을 사용한다.
+따라서 뷰는 html 페이지이다.
+그리고 부트스트렙 테마를 사용중이라 소스가 좀 길다.
+
+그 내용은 다음과 같다.
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+99
+100
+101
+102
+103
+104
+105
+106
+107
+108
+109
+110
+111
+112
+113
+114
+115
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+	xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+	data-layout-decorate="~{samples/layout/sampleLayout}"
+	>
+	
+<head>
+<title>게시판예제-페이징</title>
+<script th:inline="javascript">
+
+$(function () {
+	
+	var result =/*[[${msg}]]*/ 'default';
+	
+	if(result == 'success'){
+		alert("처리가 완료되었습니다. result:" + result);
+	}
+	
+  });
+
+</script>
+</head>
+
+
+<div layout:fragment="content">
+
+  <!-- Content Wrapper. Contains page content -->
+  <div class="content-wrapper">
+    <!-- Content Header (Page header) -->
+    <section class="content-header">
+      <h1>
+        게시판 페이징 적용
+        <small>advanced tables</small>
+      </h1>
+      <ol class="breadcrumb">
+        <li><a href="#"><i class="fa fa-dashboard"></i> Home</a></li>
+        <li><a href="#">Tables</a></li>
+        <li class="active">Data tables</li>
+      </ol>
+    </section>
+    <!-- Main content -->
+    <section class="content">
+      <div class="row">
+        <div class="col-xs-12">
+
+          <div class="box">
+            <div class="box-header with-border">
+              <h3 class="box-title">게시판 + 페이징</h3>
+              
+              <div class="box-tools">
+                <div class="input-group input-group-sm" style="width: 150px;">
+                  <input type="text" name="table_search" class="form-control pull-right" placeholder="Search">
+
+                  <div class="input-group-btn">
+                    <button type="submit" class="btn btn-default"><i class="fa fa-search"></i></button>
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+            <!-- /.box-header -->
+            <div class="box-body">
+              <table class="table table-bordered">
+                <tr>
+                  <th style="width: 10px">BNO</th>
+                  <th>TITLE</th>
+                  <th style="width: 200px">WRITER</th>
+                  <th style="width: 200px">REGDATE</th>
+                  <th style="width: 40px">VIEWCNT</th>
+                </tr>
+                
+                <tr th:each="boardVO : ${list}">
+	                  <td th:text="${boardVO.bno}">BNO</td>
+	                  <td><a th:href="@{/samplehome/board/readPage(bno=${boardVO.bno},page=${pageMaker.cri.page},perPageNum=${pageMaker.cri.perPageNum})}" th:text="${boardVO.title}">TITLE</a></td>
+	                  <td th:text="${boardVO.writer}">WRITER</td>
+	                  <td th:text="${#dates.format(boardVO.regdate, 'yyyy-MM-dd HH:mm')}">REGDATE</td>
+	                  <td th:text="${boardVO.viewcnt}">VIEWCNT</td>
+	             </tr>
+               
+              </table>
+            </div>
+            <!-- /.box-body -->
+            
+            <!-- 게시판 하단의 페이징 버튼 -->
+            <div class="box-footer clearfix">
+              <ul class="pagination pagination-sm no-margin pull-right">
+              
+              <li th:if="${pageMaker.prev} == true">
+              	<a th:href="@{/samplehome/board/listPage(page=${pageMaker.startPage}-1,perPageNum=${pageMaker.cri.perPageNum})}">&laquo;</a>
+              </li>
+              
+              <li th:each="idx,iterStat : ${#numbers.sequence(pageMaker.startPage,pageMaker.endPage)}"  th:classappend="${pageMaker.cri.page} == ${idx} ? active : null">
+                <a th:href="@{/samplehome/board/listPage(page=${idx},perPageNum=${pageMaker.cri.perPageNum})}" th:text="${idx}"></a>
+              </li>
+                
+              <li th:if="${pageMaker.next} == true and ${pageMaker.endPage > 0}">
+              	<a th:href="@{/samplehome/board/listPage(page=${pageMaker.endPage}+1,perPageNum=${pageMaker.cri.perPageNum})}">&raquo;</a>
+              </li>
+              
+              </ul>
+              
+            </div>
+          </div>
+          <!-- /.box -->
+        </div>
+        <!-- /.col -->
+      </div>
+      <!-- /.row -->
+    </section>
+    <!-- /.content -->
+  </div>
+  <!-- /.content-wrapper -->
+
+</div>
+</html>
+뷰 단에서 중요한 점을 첫째는 모든 링크는 get방식의 링크이며, 항상 현재 페이지 정보와 페이지당 보여줄 게시글 개수 데이터를 가지고 다녀야 한다.
+
+게시판에서 다른페이지로 이동, 다음 페이지로 이동, 글을 읽다가 글 목록으로 나올때 등등 페이지 상태를 유지해야 하기 때문에 이 부분을 유념해야 한다.
+
+끝!!!

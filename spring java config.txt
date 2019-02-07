@@ -1,0 +1,157 @@
+spring xml을 java config로
+Posted on 2016년 4월 6일
+
+요즘에는 spring boot가 대세라 xml로 설정할 일이 없다.
+그래서 아직 xml을 쓰는 사람을 위해 java config 설정 법을 간략하게 해보겠다.
+
+일단 첫 번째 부터 한번 보자
+
+public class BeanClass1 {
+  public String getName(){
+    return "hi youngjin";
+  }
+}
+우리한테는 이런 클래스가 있다고 가정하자!
+xml로 빈을 등록하기 위해 우리는 이렇게 했다.
+
+<bean id="beanClass1" class="me.wonwoo.bean.BeanClass1"></bean>
+위와 같이 메타정보를 xml로 설정 할때 이다. 클래스를 빈으로 설정한다.
+
+잘되나 테스트를 해보자
+
+@Test
+public void springXmlConfig(){
+  ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext("classpath:spring/spring-servlet.xml");
+  BeanClass1 beanClass1 = context.getBean(BeanClass1.class);
+  System.out.println(beanClass1.getName());
+}
+깔끔하게 잘된다.
+
+이번에는 java config로 바꾸어 보자
+일단 SpringConfig라는 설정 클래스를 만들자. 그리고 다음과 같이 넣어보자
+
+@Configuration
+public class SpringConfig {
+
+  @Bean
+  public BeanClass1 beanClass1(){
+    return new BeanClass1();
+  }
+}
+그럼 이게 빈으로 등록 된거다. 간편하다. xml과 똑같은 일은 한다. 테스트를 해보자.
+
+@Test
+public void springAnnotationConfig(){
+  AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(SpringConfig.class);
+  BeanClass1 beanClass1 = context.getBean(BeanClass1.class);
+  System.out.println(beanClass1.getName());
+}
+참고로 spring의 메타 정보는 xml이 아니다. java config가 등장하기 전까지는 xml로만 해와서 오해를 부를 수도 있다.
+spring의 메타정보는 추상화된 클래스다. 어떤식으로 파싱만 한다면 json으로 해도 무관하다.
+
+생성자를 의존하는 빈을 등록을 해보자?(말이 이상한데?)
+BeanClass2는 BeanClass1을 의존하고 있다.
+아래와 같이 빈으로 생성자를 만들자.
+
+public class BeanClass2 {
+
+  private final BeanClass1 beanClass1;
+  public BeanClass2(BeanClass1 beanClass1){
+    this.beanClass1 = beanClass1;
+  }
+  public String getName(){
+    return beanClass1.getName() + "!!!!";
+  }
+}
+우리는 다음과 같이 xml을 설정 할 수 있다.
+
+<bean id="beanClass1" class="me.wonwoo.bean.BeanClass1"></bean>
+
+<bean id="beanClass2" class="me.wonwoo.bean.BeanClass2">
+    <constructor-arg ref="beanClass1"></constructor-arg>
+</bean>
+beanClass1을 생성자로 참조하고 있다. 테스트를 해보자
+
+@Test
+public void springXmlConfig1(){
+  ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext("classpath:spring/spring-servlet.xml");
+  BeanClass2 beanClass2 = context.getBean(BeanClass2.class);
+  System.out.println(beanClass2.getName());
+}
+잘 된다.
+다음으로 java config를 해보자
+
+@Configuration
+public class SpringConfig {
+
+  @Bean
+  public BeanClass1 beanClass1(){
+    return new BeanClass1();
+  }
+
+  @Bean
+  public BeanClass2 beanClass2(BeanClass1 beanClass1){
+    return new BeanClass2(beanClass1);
+  }
+}
+우리는 위와 같이 설정 가능하다.
+BeanClass2의 파라미터로 beanClass1을 의존할 수 있다.
+
+  @Bean
+  public BeanClass2 beanClass2(){
+    return new BeanClass2(beanClass1());
+  }
+설정 파일이 같다면 위와 같이 할 수도 있다.
+
+다음으로는 setter에 넣어 보자
+
+public class BeanClass3 {
+
+  private BeanClass1 beanClass1;
+
+  public void setBeanClass1(BeanClass1 beanClass1){
+    this.beanClass1 = beanClass1;
+  }
+
+  public String getName(){
+    return beanClass1.getName() + ". my name is wonwoo!";
+  }
+}
+위와 같은 클래스가 있다고 가정하자
+
+<bean id="beanClass1" class="me.wonwoo.bean.BeanClass1"></bean>
+
+<bean id="beanClass3" class="me.wonwoo.bean.BeanClass3">
+    <property name="beanClass1" ref="beanClass1"></property>
+</bean>
+우리는 위와 같이 설정 가능하다.
+테스트를 해보자
+
+@Test
+public void springXmlConfig2(){
+  ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext("classpath:spring/spring-servlet.xml");
+  BeanClass3 beanClass3 = context.getBean(BeanClass3.class);
+  System.out.println(beanClass3.getName());
+}
+다음으로 java config를 보자.
+생성자도 해봤으니 딱히 어려운 부분은 없다.
+
+@Configuration
+public class SpringConfig {
+
+  @Bean
+  public BeanClass1 beanClass1(){
+    return new BeanClass1();
+  }
+
+  @Bean
+  public BeanClass3 beanClass3(BeanClass1 beanClass1){
+    BeanClass3 beanClass3 = new BeanClass3();
+    beanClass3.setBeanClass1(beanClass1);
+    return beanClass3;
+  }
+}
+이렇게 동일한 방식으로 하면 된다.
+이렇게 xml보다 java config가 더 깔끔한듯 싶다.
+boot를 이용하려면 이정도는 알아야 되지 않나 싶다.
+소스는 github에 올라가 있다.
