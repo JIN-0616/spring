@@ -11,4 +11,5 @@
 	 <select id="selectone" resultType="net.hb.bbs.login.LoginVO">
 	   select * from  login where userid = #{userid} and pwd = #{pwd}
 	</select>
+	
 </mapper>
