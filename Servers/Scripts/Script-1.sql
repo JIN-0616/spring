@@ -7,4 +7,5 @@ SELECT * FROM (
 		            		) c ON b.num = c.board_num ORDER BY b.num DESC
 		          ) bo
            ) WHERE row_num >= 1
-         ) WHERE row_num <= 10
+         ) WHERE row_num <= 10;
+         
