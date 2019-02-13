@@ -167,11 +167,6 @@
 		</dependency>
 		<!-- 추가 12-22 end -->
 		<dependency>
-			<groupId>org.springframework</groupId>
-			<artifactId>spring-jdbc</artifactId>
-			<version>5.1.3.RELEASE</version>
-		</dependency>
-		<dependency>
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
 			<version>2.4</version>
@@ -221,11 +216,34 @@
 			<artifactId>mail</artifactId>
 			<version>1.4.7</version>
 		</dependency>
+
+
+		<!-- for Database -->
 		<dependency>
 			<groupId>oracle</groupId>
 			<artifactId>ojdbc6</artifactId>
 			<version>11.2.0.3</version>
 		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-jdbc</artifactId>
+			<version>${org.springframework-version}</version>
+		</dependency>
+
+		<!-- json parsing 위한 라이브러리 : Gson 사용 -->
+		<dependency>
+			<groupId>com.google.code.gson</groupId>
+			<artifactId>gson</artifactId>
+			<version>2.8.0</version>
+		</dependency>
+
+		<!-- spring-websocket -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-websocket</artifactId>
+			<version>5.0.8.RELEASE</version>
+		</dependency>
+
 	</dependencies>
 	<repositories>
 		<repository>
@@ -233,7 +251,7 @@
 			<name>ORACLE JDBC Repository</name>
 			<url>http://www.datanucleus.org/downloads/maven2/</url>
 		</repository>
-		<!--<repository> <id>mesir-repo</id> <name>ORACLE JDBC Repository</name> 
+		<!--<repository> <id>mesir-repo</id> <name>ORACLE JDBC Repository</name>
 			<url>https://maven.atlassian.com/3rdparty/</url> </repository> -->
 	</repositories>
 	<build>

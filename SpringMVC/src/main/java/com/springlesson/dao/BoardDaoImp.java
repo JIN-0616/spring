@@ -21,12 +21,7 @@ public class BoardDaoImp implements BoardDao{
 
 	@Override
 	public List<Board> selectBoardList(Paging paging) throws Exception {
-		List<Object> obj = sqlSession.selectList(BoardMapper+".selectBoardlist", paging);
-		List<Board> vo;
-		for (Object obj : vo) {
-			obj
-		}
-		return ;
+		return null;
 	}
 
 	@Override
